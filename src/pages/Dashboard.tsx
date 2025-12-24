@@ -1,81 +1,116 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase, signOut } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { useSubscription } from '../hooks/useSubscription'
-import { createCheckoutSession } from '../lib/stripe'
+import { format } from 'date-fns'
+import { downloadPDF } from '../lib/storage/pdfStorage'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { isOnTrial, isActive, trialDaysRemaining, loading: subLoading } = useSubscription()
   const [contracts, setContracts] = useState<any[]>([])
+  const [invoices, setInvoices] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<'contracts' | 'invoices'>('contracts')
+  const [subscription, setSubscription] = useState<any>(null)
 
   useEffect(() => {
-    loadContracts()
-  }, [])
+    if (user) {
+      loadData()
+    }
+  }, [user])
 
-  async function loadContracts() {
+  async function loadData() {
     try {
-      const { data, error } = await supabase
+      // Load subscription
+      const { data: subData } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single()
+      
+      setSubscription(subData)
+
+      // Load contracts
+      const { data: contractsData } = await supabase
         .from('contracts')
         .select('*')
+        .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
-        .limit(10)
+      
+      setContracts(contractsData || [])
 
-      if (error) throw error
-      setContracts(data || [])
+      // Load invoices
+      const { data: invoicesData } = await supabase
+        .from('invoices')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false })
+      
+      setInvoices(invoicesData || [])
     } catch (error) {
-      console.error('Error loading contracts:', error)
+      console.error('Error loading data:', error)
     } finally {
       setLoading(false)
     }
   }
 
   async function handleSignOut() {
-    await signOut()
+    await supabase.auth.signOut()
     navigate('/')
   }
 
-  async function handleUpgrade() {
-    if (!user?.email) {
-      alert('User email not found')
-      return
-    }
-
-    setCheckoutLoading(true)
-    try {
-      await createCheckoutSession(user.email)
-    } catch (error: any) {
-      console.error('Stripe checkout error:', error)
-      alert('Failed to open checkout: ' + error.message)
-      setCheckoutLoading(false)
+  function getStatusColor(status: string) {
+    switch (status) {
+      case 'draft': return 'bg-gray-100 text-gray-700'
+      case 'sent': return 'bg-blue-100 text-blue-700'
+      case 'signed': return 'bg-green-100 text-green-700'
+      case 'paid': return 'bg-green-100 text-green-700'
+      case 'overdue': return 'bg-red-100 text-red-700'
+      case 'cancelled': return 'bg-gray-100 text-gray-500'
+      default: return 'bg-gray-100 text-gray-700'
     }
   }
 
-  // Show trial expired message
-  const trialExpired = !isActive && !isOnTrial
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-indigo-600">ContractKit</h1>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-3xl">📄</span>
+              <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
+                ContractKit
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-sm text-gray-600">{user?.email}</p>
+                <p className="text-xs text-gray-500">
+                  {subscription?.plan_type === 'pro' ? '✨ Pro Member' : '🆓 Free Trial'}
+                </p>
+              </div>
               <button
                 onClick={() => navigate('/settings')}
-                className="text-sm text-gray-600 hover:text-gray-900 transition flex items-center gap-1"
+                className="px-4 py-2 text-gray-700 hover:text-gray-900 font-medium"
               >
-                ⚙️ Settings
+                Settings
               </button>
-              <span className="text-sm text-gray-600">{user?.email}</span>
               <button
                 onClick={handleSignOut}
-                className="text-sm text-gray-600 hover:text-gray-900 transition"
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium"
               >
                 Sign Out
               </button>
@@ -84,155 +119,240 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Trial Expired Banner */}
-      {trialExpired && (
-        <div className="bg-gradient-to-r from-red-500 to-pink-600 text-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">⚠️</span>
-                <div>
-                  <p className="font-semibold">30-Day Trial Expired</p>
-                  <p className="text-sm opacity-90">
-                    Subscribe now to continue creating contracts
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleUpgrade}
-                disabled={checkoutLoading}
-                className="px-6 py-2 bg-white text-red-600 font-semibold rounded-lg hover:bg-gray-100 transition shadow-lg disabled:opacity-50"
-              >
-                {checkoutLoading ? 'Loading...' : 'Subscribe Now - $19/mo'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Active Trial Banner */}
-      {!subLoading && isOnTrial && (
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">🎉</span>
-                <div>
-                  <p className="font-semibold">30-Day Free Trial Active</p>
-                  <p className="text-sm opacity-90">
-                    {trialDaysRemaining} days remaining • Enjoy unlimited access
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleUpgrade}
-                disabled={checkoutLoading}
-                className="px-6 py-2 bg-white text-indigo-600 font-semibold rounded-lg hover:bg-gray-100 transition shadow-lg disabled:opacity-50"
-              >
-                {checkoutLoading ? 'Loading...' : 'Subscribe Now'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Welcome Section */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome back! 👋
+          </h1>
+          <p className="text-gray-600">
+            Manage your contracts and invoices in one place
+          </p>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid md:grid-cols-2 gap-4 mb-8">
+          <button
+            onClick={() => navigate('/new-contract')}
+            className="p-6 bg-gradient-to-br from-indigo-600 to-blue-600 text-white rounded-xl shadow-lg hover:shadow-xl transition group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="text-5xl">📄</div>
+              <div className="text-left">
+                <h3 className="text-xl font-bold mb-1">Create Contract</h3>
+                <p className="text-indigo-100 text-sm">
+                  Generate a professional design contract
+                </p>
+              </div>
+              <div className="ml-auto text-3xl group-hover:translate-x-2 transition">
+                →
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate('/create-invoice')}
+            className="p-6 bg-gradient-to-br from-green-600 to-emerald-600 text-white rounded-xl shadow-lg hover:shadow-xl transition group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="text-5xl">💰</div>
+              <div className="text-left">
+                <h3 className="text-xl font-bold mb-1">Create Invoice</h3>
+                <p className="text-green-100 text-sm">
+                  Send a professional invoice to your client
+                </p>
+              </div>
+              <div className="ml-auto text-3xl group-hover:translate-x-2 transition">
+                →
+              </div>
+            </div>
+          </button>
+        </div>
+
         {/* Stats Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="text-sm text-gray-600 mb-1 font-medium">Total Contracts</div>
-            <div className="text-4xl font-bold text-gray-900">{contracts.length}</div>
+        <div className="grid md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="text-gray-600 text-sm mb-1">Total Contracts</div>
+            <div className="text-3xl font-bold text-gray-900">{contracts.length}</div>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="text-sm text-gray-600 mb-1 font-medium">Active Projects</div>
-            <div className="text-4xl font-bold text-gray-900">
-              {contracts.filter(c => c.status === 'active').length}
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="text-gray-600 text-sm mb-1">Total Invoices</div>
+            <div className="text-3xl font-bold text-gray-900">{invoices.length}</div>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="text-gray-600 text-sm mb-1">Unpaid Invoices</div>
+            <div className="text-3xl font-bold text-orange-600">
+              {invoices.filter(inv => inv.status === 'sent' || inv.status === 'overdue').length}
             </div>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <div className="text-sm text-gray-600 mb-1 font-medium">Total Revenue</div>
-            <div className="text-4xl font-bold text-green-600">
-              ${contracts.reduce((sum, c) => sum + (parseFloat(c.total_fee) || 0), 0).toLocaleString()}
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+            <div className="text-gray-600 text-sm mb-1">Total Revenue</div>
+            <div className="text-3xl font-bold text-green-600">
+              ${invoices
+                .filter(inv => inv.status === 'paid')
+                .reduce((sum, inv) => sum + parseFloat(inv.total_amount), 0)
+                .toFixed(0)}
             </div>
           </div>
         </div>
 
-        {/* Create Contract Button - Locked if trial expired */}
-        <div className="mb-6">
-          {trialExpired ? (
-            <button
-              onClick={handleUpgrade}
-              className="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition shadow-lg hover:shadow-xl"
-            >
-              🔒 Subscribe to Create Contracts
-            </button>
-          ) : (
-            <button
-              onClick={() => navigate('/contracts/new')}
-              className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg hover:shadow-xl"
-            >
-              + Create New Contract
-            </button>
-          )}
-        </div>
-
-        {/* Contracts List */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900">Recent Contracts</h2>
+        {/* Tabs */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="border-b border-gray-200">
+            <div className="flex gap-8 px-6">
+              <button
+                onClick={() => setActiveTab('contracts')}
+                className={`py-4 px-2 font-medium border-b-2 transition ${
+                  activeTab === 'contracts'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                📄 Contracts ({contracts.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('invoices')}
+                className={`py-4 px-2 font-medium border-b-2 transition ${
+                  activeTab === 'invoices'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                💰 Invoices ({invoices.length})
+              </button>
+            </div>
           </div>
-          
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            </div>
-          ) : contracts.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="text-7xl mb-4">📄</div>
-              <h3 className="text-2xl font-semibold mb-2 text-gray-900">No contracts yet</h3>
-              <p className="text-gray-600 mb-6 text-lg">Create your first contract to get started protecting your work</p>
-              {!trialExpired && (
-                <button
-                  onClick={() => navigate('/contracts/new')}
-                  className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg"
-                >
-                  Create Your First Contract
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-200">
-              {contracts.map((contract) => (
-                <div key={contract.id} className="p-6 hover:bg-gray-50 transition cursor-pointer">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg mb-1 text-gray-900">{contract.project_title}</h3>
-                      <p className="text-gray-600 text-sm mb-3">{contract.client_name}</p>
-                      <div className="flex gap-6 text-sm text-gray-500">
-                        <span className="font-medium text-green-600">
-                          ${parseFloat(contract.total_fee).toLocaleString()}
-                        </span>
-                        <span>•</span>
-                        <span>{new Date(contract.created_at).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric', 
-                          year: 'numeric' 
-                        })}</span>
+
+          {/* Contracts Tab */}
+          {activeTab === 'contracts' && (
+            <div className="p-6">
+              {contracts.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">📄</div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">No contracts yet</h3>
+                  <p className="text-gray-600 mb-6">
+                    Create your first contract to get started
+                  </p>
+                  <button
+                    onClick={() => navigate('/new-contract')}
+                    className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition"
+                  >
+                    Create Contract
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {contracts.map((contract) => (
+                    <div
+                      key={contract.id}
+                      className="p-4 border border-gray-200 rounded-lg hover:border-indigo-300 hover:shadow-md transition"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="font-bold text-gray-900 text-lg">
+                              {contract.project_name}
+                            </h3>
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
+                                contract.status
+                              )}`}
+                            >
+                              {contract.status.toUpperCase()}
+                            </span>
+                          </div>
+                          <p className="text-gray-600 text-sm mb-2">
+                            Client: {contract.client_name}
+                          </p>
+                          <p className="text-gray-500 text-xs">
+                            Contract #{contract.contract_number} • Created{' '}
+                            {format(new Date(contract.created_at), 'MMM dd, yyyy')}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {contract.pdf_url && (
+                            <button
+                              onClick={() =>
+                                downloadPDF(contract.pdf_url, `Contract-${contract.contract_number}.pdf`)
+                              }
+                              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium"
+                            >
+                              Download PDF
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        contract.status === 'active' ? 'bg-green-100 text-green-800' :
-                        contract.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                        'bg-blue-100 text-blue-800'
-                      }`}>
-                        {contract.status}
-                      </span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )}
+            </div>
+          )}
+
+          {/* Invoices Tab */}
+          {activeTab === 'invoices' && (
+            <div className="p-6">
+              {invoices.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">💰</div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">No invoices yet</h3>
+                  <p className="text-gray-600 mb-6">
+                    Create your first invoice to get started
+                  </p>
+                  <button
+                    onClick={() => navigate('/create-invoice')}
+                    className="px-6 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition"
+                  >
+                    Create Invoice
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {invoices.map((invoice) => (
+                    <div
+                      key={invoice.id}
+                      className="p-4 border border-gray-200 rounded-lg hover:border-green-300 hover:shadow-md transition"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="font-bold text-gray-900 text-lg">
+                              Invoice #{invoice.invoice_number}
+                            </h3>
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
+                                invoice.status
+                              )}`}
+                            >
+                              {invoice.status.toUpperCase()}
+                            </span>
+                          </div>
+                          <p className="text-gray-600 text-sm mb-2">
+                            Client: {invoice.client_name} • ${parseFloat(invoice.total_amount).toFixed(2)}
+                          </p>
+                          <p className="text-gray-500 text-xs">
+                            Due: {format(new Date(invoice.due_date), 'MMM dd, yyyy')} • Created{' '}
+                            {format(new Date(invoice.created_at), 'MMM dd, yyyy')}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {invoice.pdf_url && (
+                            <button
+                              onClick={() =>
+                                downloadPDF(invoice.pdf_url, `Invoice-${invoice.invoice_number}.pdf`)
+                              }
+                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium"
+                            >
+                              Download PDF
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
