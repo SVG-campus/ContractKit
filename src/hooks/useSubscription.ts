@@ -2,15 +2,15 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
 
-export interface Subscription {
+interface Subscription {
   id: string
   user_id: string
-  stripe_customer_id: string | null
+  status: string
   stripe_subscription_id: string | null
-  status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'incomplete'
+  stripe_customer_id: string | null
   trial_end: string | null
   current_period_end: string | null
-  cancel_at_period_end: boolean
+  created_at: string
 }
 
 export function useSubscription() {
@@ -21,8 +21,6 @@ export function useSubscription() {
   useEffect(() => {
     if (user) {
       loadSubscription()
-    } else {
-      setLoading(false)
     }
   }, [user])
 
@@ -34,10 +32,7 @@ export function useSubscription() {
         .eq('user_id', user?.id)
         .single()
 
-      if (error && error.code !== 'PGRST116') {
-        throw error
-      }
-
+      if (error && error.code !== 'PGRST116') throw error
       setSubscription(data)
     } catch (error) {
       console.error('Error loading subscription:', error)
@@ -46,35 +41,22 @@ export function useSubscription() {
     }
   }
 
-  // Check if user is on trial
-  function isOnTrial() {
-    if (!subscription) return false
-    if (subscription.status !== 'trialing') return false
-    if (!subscription.trial_end) return false
-    return new Date(subscription.trial_end) > new Date()
-  }
+  const isOnTrial = subscription?.status === 'trialing' && subscription?.trial_end
+    ? new Date(subscription.trial_end) > new Date()
+    : false
 
-  // Check if subscription is active (including trial)
-  function isActive() {
-    if (!subscription) return false
-    return ['active', 'trialing'].includes(subscription.status)
-  }
+  const isActive = subscription?.status === 'active' || isOnTrial
 
-  // Get days remaining in trial
-  function getTrialDaysRemaining() {
-    if (!subscription?.trial_end) return 0
-    const now = new Date()
-    const trialEnd = new Date(subscription.trial_end)
-    const diff = trialEnd.getTime() - now.getTime()
-    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
-  }
+  const trialDaysRemaining = subscription?.trial_end
+    ? Math.max(0, Math.ceil((new Date(subscription.trial_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0
 
   return {
     subscription,
+    isOnTrial,
+    isActive,
+    trialDaysRemaining,
     loading,
-    isOnTrial: isOnTrial(),
-    isActive: isActive(),
-    trialDaysRemaining: getTrialDaysRemaining(),
-    reload: loadSubscription
+    refresh: loadSubscription,
   }
 }

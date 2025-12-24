@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, signOut } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useSubscription } from '../hooks/useSubscription'
+import { createCustomerPortalSession } from '../lib/stripe'
 
 interface UserProfile {
   full_name: string
@@ -19,7 +20,7 @@ interface UserProfile {
 export default function Settings() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { isActive, isOnTrial, trialDaysRemaining } = useSubscription()
+  const { subscription, isActive, isOnTrial, trialDaysRemaining } = useSubscription()
   
   const [profile, setProfile] = useState<UserProfile>({
     full_name: '',
@@ -36,6 +37,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [portalLoading, setPortalLoading] = useState(false)
 
   useEffect(() => {
     loadProfile()
@@ -49,10 +51,22 @@ export default function Settings() {
         .eq('user_id', user?.id)
         .single()
 
-      if (error && error.code !== 'PGRST116') throw error
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error loading profile:', error)
+      }
       
       if (data) {
-        setProfile(data)
+        setProfile({
+          full_name: data.full_name || '',
+          company_name: data.company_name || '',
+          business_address: data.business_address || '',
+          city: data.city || '',
+          state: data.state || '',
+          zip_code: data.zip_code || '',
+          phone: data.phone || '',
+          default_payment_terms: data.default_payment_terms || 'Net 30',
+          default_late_fee_percentage: data.default_late_fee_percentage || 1.5,
+        })
       }
     } catch (error) {
       console.error('Error loading profile:', error)
@@ -67,32 +81,57 @@ export default function Settings() {
     setMessage('')
 
     try {
-      const { error } = await supabase
+      // First check if profile exists
+      const { data: existingProfile } = await supabase
         .from('user_profiles')
-        .upsert({
-          user_id: user?.id,
-          ...profile,
-        })
+        .select('id')
+        .eq('user_id', user?.id)
+        .single()
 
-      if (error) throw error
+      if (existingProfile) {
+        // Update existing profile
+        const { error } = await supabase
+          .from('user_profiles')
+          .update(profile)
+          .eq('user_id', user?.id)
+
+        if (error) throw error
+      } else {
+        // Insert new profile
+        const { error } = await supabase
+          .from('user_profiles')
+          .insert({
+            user_id: user?.id,
+            ...profile,
+          })
+
+        if (error) throw error
+      }
 
       setMessage('✅ Profile saved successfully!')
       setTimeout(() => setMessage(''), 3000)
     } catch (error: any) {
       console.error('Error saving profile:', error)
-      setMessage('❌ Failed to save profile')
+      setMessage('❌ Failed to save profile: ' + error.message)
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleCancelSubscription() {
-    if (!confirm('Are you sure you want to cancel your subscription? You will lose access at the end of your billing period.')) {
+  async function handleManageBilling() {
+    if (!subscription?.stripe_customer_id) {
+      alert('No Stripe customer found. Please contact support.')
       return
     }
 
-    alert('Subscription cancellation will be implemented with Stripe Customer Portal')
-    // TODO: Implement Stripe Customer Portal
+    setPortalLoading(true)
+    try {
+      await createCustomerPortalSession(subscription.stripe_customer_id)
+    } catch (error: any) {
+      console.error('Portal error:', error)
+      alert('Failed to open billing portal: ' + error.message)
+      setPortalLoading(false)
+    }
   }
 
   if (loading) {
@@ -134,7 +173,7 @@ export default function Settings() {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Subscription Status */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">�� Subscription</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-4">💳 Subscription</h2>
           
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -148,7 +187,7 @@ export default function Settings() {
                 {isActive && !isOnTrial && (
                   <span className="text-green-600">✅ Active</span>
                 )}
-                {!isActive && (
+                {!isActive && !isOnTrial && (
                   <span className="text-red-600">❌ Inactive</span>
                 )}
               </p>
@@ -162,21 +201,17 @@ export default function Settings() {
           </div>
 
           {isActive && !isOnTrial && (
-            <div className="flex gap-3">
+            <div>
               <button
-                onClick={handleCancelSubscription}
-                className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition"
+                onClick={handleManageBilling}
+                disabled={portalLoading}
+                className="w-full px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg disabled:opacity-50"
               >
-                Cancel Subscription
+                {portalLoading ? 'Loading...' : 'Manage Subscription & Billing →'}
               </button>
-              <a
-                href="https://billing.stripe.com/p/login/test_"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition"
-              >
-                Manage Billing →
-              </a>
+              <p className="text-xs text-gray-500 mt-3 text-center">
+                Cancel anytime, update payment method, view invoices, and more
+              </p>
             </div>
           )}
 
