@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, signOut } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useSubscription } from '../hooks/useSubscription'
-import { createCustomerPortalSession } from '../lib/stripe'
 
 interface UserProfile {
   full_name: string
@@ -37,25 +36,30 @@ export default function Settings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
-  const [portalLoading, setPortalLoading] = useState(false)
 
   useEffect(() => {
-    loadProfile()
-  }, [])
+    if (user) {
+      loadProfile()
+    }
+  }, [user])
 
   async function loadProfile() {
     try {
+      console.log('Loading profile for user:', user?.id)
+      
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', user?.id)
-        .single()
+        .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error loading profile:', error)
+        setMessage('⚠️ Error loading profile: ' + error.message)
       }
       
       if (data) {
+        console.log('Profile loaded:', data)
         setProfile({
           full_name: data.full_name || '',
           company_name: data.company_name || '',
@@ -67,9 +71,12 @@ export default function Settings() {
           default_payment_terms: data.default_payment_terms || 'Net 30',
           default_late_fee_percentage: data.default_late_fee_percentage || 1.5,
         })
+      } else {
+        console.log('No profile found, will create new one on save')
       }
-    } catch (error) {
-      console.error('Error loading profile:', error)
+    } catch (error: any) {
+      console.error('Exception loading profile:', error)
+      setMessage('⚠️ Exception: ' + error.message)
     } finally {
       setLoading(false)
     }
@@ -80,39 +87,40 @@ export default function Settings() {
     setSaving(true)
     setMessage('')
 
+    console.log('Saving profile:', profile)
+    console.log('User ID:', user?.id)
+
     try {
-      // First check if profile exists
-      const { data: existingProfile } = await supabase
+      // Use upsert which handles both insert and update
+      const { data, error } = await supabase
         .from('user_profiles')
-        .select('id')
-        .eq('user_id', user?.id)
-        .single()
+        .upsert({
+          user_id: user?.id,
+          full_name: profile.full_name,
+          company_name: profile.company_name,
+          business_address: profile.business_address,
+          city: profile.city,
+          state: profile.state,
+          zip_code: profile.zip_code,
+          phone: profile.phone,
+          default_payment_terms: profile.default_payment_terms,
+          default_late_fee_percentage: profile.default_late_fee_percentage,
+        }, {
+          onConflict: 'user_id'
+        })
+        .select()
 
-      if (existingProfile) {
-        // Update existing profile
-        const { error } = await supabase
-          .from('user_profiles')
-          .update(profile)
-          .eq('user_id', user?.id)
-
-        if (error) throw error
-      } else {
-        // Insert new profile
-        const { error } = await supabase
-          .from('user_profiles')
-          .insert({
-            user_id: user?.id,
-            ...profile,
-          })
-
-        if (error) throw error
+      if (error) {
+        console.error('Supabase error:', error)
+        throw error
       }
 
+      console.log('Profile saved successfully:', data)
       setMessage('✅ Profile saved successfully!')
       setTimeout(() => setMessage(''), 3000)
     } catch (error: any) {
       console.error('Error saving profile:', error)
-      setMessage('❌ Failed to save profile: ' + error.message)
+      setMessage('❌ Failed to save: ' + (error.message || 'Unknown error'))
     } finally {
       setSaving(false)
     }
@@ -120,18 +128,11 @@ export default function Settings() {
 
   async function handleManageBilling() {
     if (!subscription?.stripe_customer_id) {
-      alert('No Stripe customer found. Please contact support.')
+      setMessage('⚠️ No Stripe customer ID found. This happens if you subscribed before this update. Please contact support at contractkit.supp@gmail.com')
       return
     }
 
-    setPortalLoading(true)
-    try {
-      await createCustomerPortalSession(subscription.stripe_customer_id)
-    } catch (error: any) {
-      console.error('Portal error:', error)
-      alert('Failed to open billing portal: ' + error.message)
-      setPortalLoading(false)
-    }
+    alert('Stripe Customer Portal will be implemented. For now, email contractkit.supp@gmail.com to manage your subscription.')
   }
 
   if (loading) {
@@ -204,13 +205,12 @@ export default function Settings() {
             <div>
               <button
                 onClick={handleManageBilling}
-                disabled={portalLoading}
-                className="w-full px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg disabled:opacity-50"
+                className="w-full px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg"
               >
-                {portalLoading ? 'Loading...' : 'Manage Subscription & Billing →'}
+                Manage Subscription & Billing →
               </button>
               <p className="text-xs text-gray-500 mt-3 text-center">
-                Cancel anytime, update payment method, view invoices, and more
+                Cancel anytime, update payment method, view invoices
               </p>
             </div>
           )}
@@ -223,6 +223,16 @@ export default function Settings() {
               Subscribe Now - $19/mo
             </button>
           )}
+
+          {/* Debug Info */}
+          <div className="mt-4 p-3 bg-gray-50 rounded text-xs">
+            <p className="font-mono text-gray-600">
+              Customer ID: {subscription?.stripe_customer_id || 'Not set'}
+            </p>
+            <p className="font-mono text-gray-600">
+              User ID: {user?.id}
+            </p>
+          </div>
         </div>
 
         {/* Profile Form */}
@@ -231,7 +241,9 @@ export default function Settings() {
 
           {message && (
             <div className={`mb-4 p-4 rounded-lg ${
-              message.includes('✅') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+              message.includes('✅') ? 'bg-green-50 text-green-800' : 
+              message.includes('⚠️') ? 'bg-yellow-50 text-yellow-800' :
+              'bg-red-50 text-red-800'
             }`}>
               {message}
             </div>
@@ -325,6 +337,7 @@ export default function Settings() {
                     <option value="CA">California</option>
                     <option value="NY">New York</option>
                     <option value="TX">Texas</option>
+                    <option value="FL">Florida</option>
                   </select>
                 </div>
 
@@ -372,7 +385,7 @@ export default function Settings() {
                   type="number"
                   step="0.1"
                   value={profile.default_late_fee_percentage}
-                  onChange={(e) => setProfile({ ...profile, default_late_fee_percentage: parseFloat(e.target.value) })}
+                  onChange={(e) => setProfile({ ...profile, default_late_fee_percentage: parseFloat(e.target.value) || 0 })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
               </div>
