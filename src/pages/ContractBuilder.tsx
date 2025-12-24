@@ -41,7 +41,7 @@ export default function ContractBuilder() {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('contracts')
         .insert({
           user_id: user?.id,
@@ -161,7 +161,6 @@ export default function ContractBuilder() {
                   <option value="NY">New York</option>
                   <option value="TX">Texas</option>
                   <option value="FL">Florida</option>
-                  {/* Add more states as needed */}
                 </select>
               </div>
             </div>
