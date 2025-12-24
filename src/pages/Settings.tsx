@@ -19,7 +19,7 @@ interface UserProfile {
 export default function Settings() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { subscription, isActive, isOnTrial, trialDaysRemaining } = useSubscription()
+  const { isActive, isOnTrial, trialDaysRemaining } = useSubscription()
   
   const [profile, setProfile] = useState<UserProfile>({
     full_name: '',
@@ -134,7 +134,7 @@ export default function Settings() {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Subscription Status */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">💳 Subscription</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-4">�� Subscription</h2>
           
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -290,7 +290,6 @@ export default function Settings() {
                     <option value="CA">California</option>
                     <option value="NY">New York</option>
                     <option value="TX">Texas</option>
-                    {/* Add all 50 states */}
                   </select>
                 </div>
 
