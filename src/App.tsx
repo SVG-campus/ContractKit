@@ -4,6 +4,8 @@ import LandingComplete from './pages/LandingComplete'
 import Dashboard from './pages/Dashboard'
 import ContractBuilder from './pages/ContractBuilder'
 import AuthCallback from './pages/AuthCallback'
+import Success from './pages/Success'
+import Cancel from './pages/Cancel'
 
 function App() {
   const { user, loading } = useAuth()
@@ -25,6 +27,8 @@ function App() {
         {/* Public routes */}
         <Route path="/" element={!user ? <LandingComplete /> : <Navigate to="/dashboard" />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/success" element={user ? <Success /> : <Navigate to="/" />} />
+        <Route path="/cancel" element={user ? <Cancel /> : <Navigate to="/" />} />
         
         {/* Protected routes */}
         <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/" />} />

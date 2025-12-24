@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, signOut } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useSubscription } from '../hooks/useSubscription'
+import { createCheckoutSession } from '../lib/stripe'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { isOnTrial, trialDaysRemaining, loading: subLoading } = useSubscription()
+  const { isOnTrial, isActive, trialDaysRemaining, loading: subLoading } = useSubscription()
   const [contracts, setContracts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
 
   useEffect(() => {
     loadContracts()
@@ -38,9 +40,23 @@ export default function Dashboard() {
   }
 
   async function handleUpgrade() {
-    // TODO: Implement Stripe checkout
-    alert('Stripe checkout coming next!')
+    if (!user?.email) {
+      alert('User email not found')
+      return
+    }
+
+    setCheckoutLoading(true)
+    try {
+      await createCheckoutSession(user.email)
+    } catch (error: any) {
+      console.error('Stripe checkout error:', error)
+      alert('Failed to open checkout: ' + error.message)
+      setCheckoutLoading(false)
+    }
   }
+
+  // Show trial expired message
+  const trialExpired = !isActive && !isOnTrial
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -62,7 +78,33 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Subscription Status Banner */}
+      {/* Trial Expired Banner */}
+      {trialExpired && (
+        <div className="bg-gradient-to-r from-red-500 to-pink-600 text-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⚠️</span>
+                <div>
+                  <p className="font-semibold">Trial Expired</p>
+                  <p className="text-sm opacity-90">
+                    Subscribe now to continue creating contracts
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleUpgrade}
+                disabled={checkoutLoading}
+                className="px-6 py-2 bg-white text-red-600 font-semibold rounded-lg hover:bg-gray-100 transition shadow-lg disabled:opacity-50"
+              >
+                {checkoutLoading ? 'Loading...' : 'Subscribe Now - $19/mo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Trial Banner */}
       {!subLoading && isOnTrial && (
         <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -78,9 +120,10 @@ export default function Dashboard() {
               </div>
               <button
                 onClick={handleUpgrade}
-                className="px-6 py-2 bg-white text-indigo-600 font-semibold rounded-lg hover:bg-gray-100 transition shadow-lg"
+                disabled={checkoutLoading}
+                className="px-6 py-2 bg-white text-indigo-600 font-semibold rounded-lg hover:bg-gray-100 transition shadow-lg disabled:opacity-50"
               >
-                Subscribe Now
+                {checkoutLoading ? 'Loading...' : 'Subscribe Now'}
               </button>
             </div>
           </div>
@@ -109,14 +152,23 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Create Contract Button */}
+        {/* Create Contract Button - Locked if trial expired */}
         <div className="mb-6">
-          <button
-            onClick={() => navigate('/contracts/new')}
-            className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg hover:shadow-xl"
-          >
-            + Create New Contract
-          </button>
+          {trialExpired ? (
+            <button
+              onClick={handleUpgrade}
+              className="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition shadow-lg hover:shadow-xl"
+            >
+              🔒 Subscribe to Create Contracts
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/contracts/new')}
+              className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg hover:shadow-xl"
+            >
+              + Create New Contract
+            </button>
+          )}
         </div>
 
         {/* Contracts List */}
@@ -134,12 +186,14 @@ export default function Dashboard() {
               <div className="text-7xl mb-4">📄</div>
               <h3 className="text-2xl font-semibold mb-2 text-gray-900">No contracts yet</h3>
               <p className="text-gray-600 mb-6 text-lg">Create your first contract to get started protecting your work</p>
-              <button
-                onClick={() => navigate('/contracts/new')}
-                className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg"
-              >
-                Create Your First Contract
-              </button>
+              {!trialExpired && (
+                <button
+                  onClick={() => navigate('/contracts/new')}
+                  className="px-8 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-lg"
+                >
+                  Create Your First Contract
+                </button>
+              )}
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
