@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import Stripe from 'stripe'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
+  apiVersion: '2024-11-20.acacia',
 })
 
 export default async function handler(
@@ -39,9 +39,8 @@ export default async function handler(
       mode: 'subscription',
       success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/cancel`,
-      subscription_data: {
-        trial_period_days: 0, // No trial since they already have 14-day trial
-      },
+      // Remove trial_period_days since users already have app-level trial
+      allow_promotion_codes: true,
     })
 
     return res.status(200).json({ 
