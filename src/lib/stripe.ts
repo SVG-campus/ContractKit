@@ -13,40 +13,36 @@ if (!stripePriceId) {
 
 export const stripePromise = loadStripe(stripePublishableKey!)
 
-// Create Stripe Checkout Session (client-side redirect)
+// Create Stripe Checkout Session via API
 export async function createCheckoutSession(userEmail: string) {
-  const stripe = await stripePromise
-  
-  if (!stripe) {
-    throw new Error('Stripe not loaded')
-  }
-
-  // Get current URL for success/cancel redirects
-  const baseUrl = window.location.origin
-  
-  // Redirect to Stripe Checkout using client-side method
-  const { error } = await stripe.redirectToCheckout({
-    lineItems: [
-      {
-        price: stripePriceId!,
-        quantity: 1,
+  try {
+    const response = await fetch('/api/create-checkout-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    ],
-    mode: 'subscription',
-    successUrl: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: `${baseUrl}/cancel`,
-    customerEmail: userEmail,
-    clientReferenceId: userEmail,
-  })
+      body: JSON.stringify({
+        email: userEmail,
+        priceId: stripePriceId,
+      }),
+    })
 
-  if (error) {
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to create checkout session')
+    }
+
+    const { url } = await response.json()
+    
+    // Redirect to Stripe Checkout
+    window.location.href = url
+  } catch (error: any) {
+    console.error('Checkout error:', error)
     throw error
   }
 }
 
 // Get Stripe Customer Portal URL (for managing subscriptions)
 export function getCustomerPortalUrl() {
-  // For now, direct users to Stripe billing portal
-  // Later we can build a backend API to generate portal sessions
-  return 'https://billing.stripe.com/p/login/test_' // This will be replaced with proper portal
+  return 'https://billing.stripe.com/p/login/test_'
 }
