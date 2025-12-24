@@ -1,5 +1,9 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import LandingComplete from './pages/LandingComplete'
+import Dashboard from './pages/Dashboard'
+import ContractBuilder from './pages/ContractBuilder'
+import AuthCallback from './pages/AuthCallback'
 
 function App() {
   const { user, loading } = useAuth()
@@ -15,26 +19,21 @@ function App() {
     )
   }
 
-  if (!user) {
-    return <LandingComplete />
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold">Welcome to ContractKit!</h1>
-        <p className="mt-4">Logged in as: {user.email}</p>
-        <button 
-          onClick={async () => {
-            const { signOut } = await import('./lib/supabase')
-            signOut()
-          }}
-          className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Sign Out
-        </button>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={!user ? <LandingComplete /> : <Navigate to="/dashboard" />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        
+        {/* Protected routes */}
+        <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/" />} />
+        <Route path="/contracts/new" element={user ? <ContractBuilder /> : <Navigate to="/" />} />
+        
+        {/* Catch all */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
