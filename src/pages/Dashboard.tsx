@@ -7,7 +7,7 @@ import { useSubscription } from '../hooks/useSubscription'
 export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { subscription, isOnTrial, isActive, trialDaysRemaining, loading: subLoading } = useSubscription()
+  const { isOnTrial, trialDaysRemaining, loading: subLoading } = useSubscription()
   const [contracts, setContracts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
