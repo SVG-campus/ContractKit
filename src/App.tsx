@@ -2,45 +2,66 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import LandingComplete from './pages/LandingComplete'
 import Dashboard from './pages/Dashboard'
-import ContractBuilder from './pages/ContractBuilder'
+import NewContract from './pages/NewContract'
 import Settings from './pages/Settings'
-import AuthCallback from './pages/AuthCallback'
 import Success from './pages/Success'
 import Cancel from './pages/Cancel'
+import CreateInvoice from './pages/CreateInvoice'
 
-function App() {
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-xl text-gray-600">Loading ContractKit...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
       </div>
     )
   }
 
+  return user ? <>{children}</> : <Navigate to="/" />
+}
+
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public routes */}
-        <Route path="/" element={!user ? <LandingComplete /> : <Navigate to="/dashboard" />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/success" element={user ? <Success /> : <Navigate to="/" />} />
-        <Route path="/cancel" element={user ? <Cancel /> : <Navigate to="/" />} />
-        
-        {/* Protected routes */}
-        <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/" />} />
-        <Route path="/contracts/new" element={user ? <ContractBuilder /> : <Navigate to="/" />} />
-        <Route path="/settings" element={user ? <Settings /> : <Navigate to="/" />} />
-        
-        {/* Catch all */}
-        <Route path="*" element={<Navigate to="/" />} />
+        <Route path="/" element={<LandingComplete />} />
+        <Route path="/success" element={<Success />} />
+        <Route path="/cancel" element={<Cancel />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/new-contract"
+          element={
+            <ProtectedRoute>
+              <NewContract />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/create-invoice"
+          element={
+            <ProtectedRoute>
+              <CreateInvoice />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   )
 }
-
-export default App
