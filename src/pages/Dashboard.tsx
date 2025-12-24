@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { format } from 'date-fns'
 import { downloadPDF } from '../lib/storage/pdfStorage'
+import { sendContractForSignature, sendInvoiceEmail, markInvoiceAsPaid } from '../lib/email/emailService'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -13,6 +14,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'contracts' | 'invoices'>('contracts')
   const [subscription, setSubscription] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null)
 
   useEffect(() => {
     if (user) {
@@ -22,6 +25,15 @@ export default function Dashboard() {
 
   async function loadData() {
     try {
+      // Load profile
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single()
+      
+      setProfile(profileData)
+
       // Load subscription
       const { data: subData } = await supabase
         .from('subscriptions')
@@ -52,6 +64,57 @@ export default function Dashboard() {
       console.error('Error loading data:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleSendContract(contract: any) {
+    if (!profile) return
+    
+    setSendingEmail(contract.id)
+    const success = await sendContractForSignature({
+      contractId: contract.id,
+      contractNumber: contract.contract_number,
+      clientName: contract.client_name,
+      clientEmail: contract.client_email,
+      projectName: contract.project_name,
+      contractorName: profile.full_name,
+      pdfUrl: contract.pdf_url,
+    })
+
+    if (success) {
+      await loadData() // Refresh to show updated status
+    }
+    setSendingEmail(null)
+  }
+
+  async function handleSendInvoice(invoice: any) {
+    if (!profile) return
+    
+    setSendingEmail(invoice.id)
+    const success = await sendInvoiceEmail({
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoice_number,
+      clientName: invoice.client_name,
+      clientEmail: invoice.client_email,
+      contractorName: profile.full_name,
+      totalAmount: parseFloat(invoice.total_amount),
+      dueDate: format(new Date(invoice.due_date), 'MMM dd, yyyy'),
+      pdfUrl: invoice.pdf_url,
+    })
+
+    if (success) {
+      await loadData() // Refresh to show updated status
+    }
+    setSendingEmail(null)
+  }
+
+  async function handleMarkPaid(invoice: any) {
+    if (confirm('Mark this invoice as paid?')) {
+      const success = await markInvoiceAsPaid(invoice.id)
+      if (success) {
+        alert('✅ Invoice marked as paid!')
+        await loadData()
+      }
     }
   }
 
@@ -138,7 +201,7 @@ export default function Dashboard() {
             className="p-6 bg-gradient-to-br from-indigo-600 to-blue-600 text-white rounded-xl shadow-lg hover:shadow-xl transition group"
           >
             <div className="flex items-center gap-4">
-              <div className="text-5xl">📄</div>
+              <div className="text-5xl">��</div>
               <div className="text-left">
                 <h3 className="text-xl font-bold mb-1">Create Contract</h3>
                 <p className="text-indigo-100 text-sm">
@@ -219,7 +282,7 @@ export default function Dashboard() {
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
-                💰 Invoices ({invoices.length})
+                �� Invoices ({invoices.length})
               </button>
             </div>
           </div>
@@ -263,7 +326,7 @@ export default function Dashboard() {
                             </span>
                           </div>
                           <p className="text-gray-600 text-sm mb-2">
-                            Client: {contract.client_name}
+                            Client: {contract.client_name} • ${parseFloat(contract.total_amount).toLocaleString()}
                           </p>
                           <p className="text-gray-500 text-xs">
                             Contract #{contract.contract_number} • Created{' '}
@@ -276,9 +339,18 @@ export default function Dashboard() {
                               onClick={() =>
                                 downloadPDF(contract.pdf_url, `Contract-${contract.contract_number}.pdf`)
                               }
-                              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium"
+                              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
                             >
-                              Download PDF
+                              📥 Download
+                            </button>
+                          )}
+                          {contract.status === 'draft' && (
+                            <button
+                              onClick={() => handleSendContract(contract)}
+                              disabled={sendingEmail === contract.id}
+                              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm font-medium disabled:opacity-50"
+                            >
+                              {sendingEmail === contract.id ? '📧 Sending...' : '📧 Send to Client'}
                             </button>
                           )}
                         </div>
@@ -342,9 +414,26 @@ export default function Dashboard() {
                               onClick={() =>
                                 downloadPDF(invoice.pdf_url, `Invoice-${invoice.invoice_number}.pdf`)
                               }
-                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium"
+                              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
                             >
-                              Download PDF
+                              📥 Download
+                            </button>
+                          )}
+                          {invoice.status === 'draft' && (
+                            <button
+                              onClick={() => handleSendInvoice(invoice)}
+                              disabled={sendingEmail === invoice.id}
+                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-medium disabled:opacity-50"
+                            >
+                              {sendingEmail === invoice.id ? '📧 Sending...' : '📧 Send to Client'}
+                            </button>
+                          )}
+                          {invoice.status === 'sent' && (
+                            <button
+                              onClick={() => handleMarkPaid(invoice)}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium"
+                            >
+                              ✅ Mark Paid
                             </button>
                           )}
                         </div>
