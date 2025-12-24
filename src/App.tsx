@@ -7,6 +7,7 @@ import Settings from './pages/Settings'
 import Success from './pages/Success'
 import Cancel from './pages/Cancel'
 import CreateInvoice from './pages/CreateInvoice'
+import SignContract from './pages/SignContract'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/" element={<LandingComplete />} />
         <Route path="/success" element={<Success />} />
         <Route path="/cancel" element={<Cancel />} />
+        <Route path="/sign/:contractId" element={<SignContract />} />
         <Route
           path="/dashboard"
           element={
