@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { format } from 'date-fns'
 
 export default function SignContract() {
   const { contractId } = useParams()
-  const navigate = useNavigate()
   const [contract, setContract] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [signing, setSigning] = useState(false)
@@ -318,7 +317,7 @@ export default function SignContract() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
               >
-                �� View Full Contract PDF
+                📄 View Full Contract PDF
               </a>
             </div>
           )}

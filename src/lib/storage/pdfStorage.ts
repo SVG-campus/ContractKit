@@ -11,7 +11,7 @@ export async function uploadContractPDF(
 
     const filePath = `${user.id}/${contractId}/${fileName}.pdf`
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('contracts')
       .upload(filePath, pdfBlob, {
         contentType: 'application/pdf',
@@ -60,7 +60,7 @@ export async function uploadInvoicePDF(
 
     const filePath = `${user.id}/${invoiceId}/${fileName}.pdf`
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('invoices')
       .upload(filePath, pdfBlob, {
         contentType: 'application/pdf',

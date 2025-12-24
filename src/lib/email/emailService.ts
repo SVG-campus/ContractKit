@@ -1,5 +1,4 @@
 import { supabase } from '../supabase'
-import { generateContractSignatureEmail, generateInvoiceEmail } from './sendEmail'
 
 interface SendContractEmailParams {
   contractId: string
