@@ -167,8 +167,8 @@ export default function Success() {
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-500">
               Need help? Email{' '}
-              <a href="mailto:support@contractkit.com" className="text-indigo-600 hover:underline">
-                support@contractkit.com
+              <a href="mailto:contractkit.supp@gmail.com" className="text-indigo-600 hover:underline">
+                contractkit.supp@gmail.com
               </a>
             </p>
           </div>

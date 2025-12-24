@@ -66,6 +66,12 @@ export default function Dashboard() {
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-indigo-600">ContractKit</h1>
             <div className="flex items-center gap-6">
+              <button
+                onClick={() => navigate('/settings')}
+                className="text-sm text-gray-600 hover:text-gray-900 transition flex items-center gap-1"
+              >
+                ⚙️ Settings
+              </button>
               <span className="text-sm text-gray-600">{user?.email}</span>
               <button
                 onClick={handleSignOut}

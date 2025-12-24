@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth'
 import LandingComplete from './pages/LandingComplete'
 import Dashboard from './pages/Dashboard'
 import ContractBuilder from './pages/ContractBuilder'
+import Settings from './pages/Settings'
 import AuthCallback from './pages/AuthCallback'
 import Success from './pages/Success'
 import Cancel from './pages/Cancel'
@@ -33,6 +34,7 @@ function App() {
         {/* Protected routes */}
         <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/" />} />
         <Route path="/contracts/new" element={user ? <ContractBuilder /> : <Navigate to="/" />} />
+        <Route path="/settings" element={user ? <Settings /> : <Navigate to="/" />} />
         
         {/* Catch all */}
         <Route path="*" element={<Navigate to="/" />} />
