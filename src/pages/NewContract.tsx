@@ -92,7 +92,6 @@ export default function NewContract() {
         contractNumber,
         effectiveDate,
         contractorName: profile.full_name,
-        contractorEmail: user.email!,
         contractorAddress: profile.address || '',
         clientName,
         clientEmail,
