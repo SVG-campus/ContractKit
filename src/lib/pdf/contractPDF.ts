@@ -1,8 +1,10 @@
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
 
-interface ContractData {
+export interface ContractData {
   contractNumber: string
+  effectiveDate: string
+  contractorName: string
+  contractorAddress: string
   clientName: string
   clientEmail: string
   clientCompany?: string
@@ -12,305 +14,219 @@ interface ContractData {
   deliverables: string
   timeline: string
   totalAmount: number
+  revisionsIncluded: number
   paymentSchedule: string
-  revisions: number
-  contractorName: string
-  contractorCompany: string
-  contractorAddress: string
-  contractorPhone: string
-  effectiveDate: string
-  state: string
+  governingState: string
 }
 
 export async function generateContractPDF(data: ContractData): Promise<Blob> {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'letter',
-  })
+  const doc = new jsPDF()
+  let yPos = 20
 
-  const pageWidth = doc.internal.pageSize.getWidth()
-  const pageHeight = doc.internal.pageSize.getHeight()
-  const margin = 20
-  let yPos = margin
-
-  // Header
-  doc.setFontSize(24)
+  // Title
+  doc.setFontSize(20)
   doc.setFont('helvetica', 'bold')
-  doc.text('DESIGN SERVICES AGREEMENT', pageWidth / 2, yPos, { align: 'center' })
+  doc.text('DESIGN SERVICES CONTRACT', 105, yPos, { align: 'center' })
   yPos += 15
 
-  // Contract Number and Date
+  // Contract Number
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
-  doc.text(`Contract #: ${data.contractNumber}`, margin, yPos)
-  doc.text(`Effective Date: ${data.effectiveDate}`, pageWidth - margin, yPos, { align: 'right' })
-  yPos += 10
-
-  // Divider
-  doc.setLineWidth(0.5)
-  doc.line(margin, yPos, pageWidth - margin, yPos)
+  doc.text(`Contract #: ${data.contractNumber}`, 20, yPos)
+  doc.text(`Effective Date: ${new Date(data.effectiveDate).toLocaleDateString()}`, 150, yPos)
   yPos += 10
 
   // Parties Section
   doc.setFontSize(14)
   doc.setFont('helvetica', 'bold')
-  doc.text('PARTIES TO THIS AGREEMENT', margin, yPos)
+  doc.text('PARTIES', 20, yPos)
   yPos += 8
 
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Designer/Contractor:', margin, yPos)
-  yPos += 6
-
-  doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
-  doc.text(data.contractorName, margin + 5, yPos)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Designer (Service Provider):', 20, yPos)
   yPos += 5
-  if (data.contractorCompany) {
-    doc.text(data.contractorCompany, margin + 5, yPos)
+  doc.text(data.contractorName, 25, yPos)
+  if (data.contractorAddress) {
     yPos += 5
+    doc.text(data.contractorAddress, 25, yPos)
   }
-  doc.text(data.contractorAddress, margin + 5, yPos)
-  yPos += 5
-  doc.text(`Phone: ${data.contractorPhone}`, margin + 5, yPos)
   yPos += 10
 
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Client:', margin, yPos)
-  yPos += 6
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text(data.clientName, margin + 5, yPos)
+  doc.text('Client:', 20, yPos)
   yPos += 5
+  doc.text(data.clientName, 25, yPos)
+  yPos += 5
+  doc.text(data.clientEmail, 25, yPos)
   if (data.clientCompany) {
-    doc.text(data.clientCompany, margin + 5, yPos)
     yPos += 5
+    doc.text(data.clientCompany, 25, yPos)
   }
-  doc.text(data.clientEmail, margin + 5, yPos)
+  yPos += 12
+
+  // Project Details
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.text('PROJECT DETAILS', 20, yPos)
+  yPos += 8
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Project Name: ${data.projectName}`, 20, yPos)
+  yPos += 6
+  
+  if (data.projectDescription) {
+    const descLines = doc.splitTextToSize(`Description: ${data.projectDescription}`, 170)
+    doc.text(descLines, 20, yPos)
+    yPos += (descLines.length * 5) + 5
+  }
+
+  // Scope of Work
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Scope of Work:', 20, yPos)
+  yPos += 6
+  
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  const scopeLines = doc.splitTextToSize(data.scopeOfWork, 170)
+  doc.text(scopeLines, 20, yPos)
+  yPos += (scopeLines.length * 5) + 8
+
+  // Check if we need a new page
+  if (yPos > 250) {
+    doc.addPage()
+    yPos = 20
+  }
+
+  // Deliverables
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Deliverables:', 20, yPos)
+  yPos += 6
+  
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  const delivLines = doc.splitTextToSize(data.deliverables, 170)
+  doc.text(delivLines, 20, yPos)
+  yPos += (delivLines.length * 5) + 8
+
+  // Financial Terms
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.text('FINANCIAL TERMS', 20, yPos)
+  yPos += 8
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Total Project Fee: $${data.totalAmount.toLocaleString()}`, 20, yPos)
+  yPos += 6
+  doc.text(`Payment Schedule: ${data.paymentSchedule}`, 20, yPos)
+  yPos += 6
+  doc.text(`Revisions Included: ${data.revisionsIncluded} rounds`, 20, yPos)
+  yPos += 10
+
+  // Timeline
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Timeline:', 20, yPos)
+  yPos += 6
+  
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text(data.timeline, 20, yPos)
   yPos += 10
 
   // Check if we need a new page
-  if (yPos > pageHeight - 40) {
+  if (yPos > 230) {
     doc.addPage()
-    yPos = margin
+    yPos = 20
   }
 
-  // Project Details Section
+  // Standard Terms
   doc.setFontSize(14)
   doc.setFont('helvetica', 'bold')
-  doc.text('PROJECT DETAILS', margin, yPos)
+  doc.text('STANDARD TERMS & CONDITIONS', 20, yPos)
   yPos += 8
 
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Project Name:', margin, yPos)
-  yPos += 6
-  doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
-  const projectNameLines = doc.splitTextToSize(data.projectName, pageWidth - 2 * margin - 5)
-  doc.text(projectNameLines, margin + 5, yPos)
-  yPos += projectNameLines.length * 5 + 5
-
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Project Description:', margin, yPos)
-  yPos += 6
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  const descLines = doc.splitTextToSize(data.projectDescription, pageWidth - 2 * margin - 5)
-  doc.text(descLines, margin + 5, yPos)
-  yPos += descLines.length * 5 + 5
 
-  // Check if we need a new page
-  if (yPos > pageHeight - 60) {
-    doc.addPage()
-    yPos = margin
-  }
-
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Scope of Work:', margin, yPos)
-  yPos += 6
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  const scopeLines = doc.splitTextToSize(data.scopeOfWork, pageWidth - 2 * margin - 5)
-  doc.text(scopeLines, margin + 5, yPos)
-  yPos += scopeLines.length * 5 + 5
-
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Deliverables:', margin, yPos)
-  yPos += 6
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  const delivLines = doc.splitTextToSize(data.deliverables, pageWidth - 2 * margin - 5)
-  doc.text(delivLines, margin + 5, yPos)
-  yPos += delivLines.length * 5 + 5
-
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Timeline:', margin, yPos)
-  yPos += 6
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text(data.timeline, margin + 5, yPos)
-  yPos += 10
-
-  // Check if we need a new page
-  if (yPos > pageHeight - 60) {
-    doc.addPage()
-    yPos = margin
-  }
-
-  // Financial Terms Section
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'bold')
-  doc.text('FINANCIAL TERMS', margin, yPos)
-  yPos += 8
-
-  doc.setFontSize(11)
-  doc.text('Total Project Fee:', margin, yPos)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text(`$${data.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, margin + 50, yPos)
-  yPos += 8
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('Payment Schedule:', margin, yPos)
-  yPos += 6
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  const paymentLines = doc.splitTextToSize(data.paymentSchedule, pageWidth - 2 * margin - 5)
-  doc.text(paymentLines, margin + 5, yPos)
-  yPos += paymentLines.length * 5 + 5
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.text('Revisions Included:', margin, yPos)
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
-  doc.text(`${data.revisions} rounds of revisions`, margin + 50, yPos)
-  yPos += 10
-
-  // Check if we need a new page
-  if (yPos > pageHeight - 80) {
-    doc.addPage()
-    yPos = margin
-  }
-
-  // Legal Terms Section
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'bold')
-  doc.text('TERMS AND CONDITIONS', margin, yPos)
-  yPos += 8
-
-  const legalTerms = [
+  const terms = [
     {
-      title: '1. Intellectual Property',
-      text: 'Upon full payment, all rights to the final approved designs will transfer to the Client. Designer retains the right to display the work in their portfolio.',
+      title: '1. Intellectual Property Rights',
+      text: 'Upon full payment, all rights to the final approved designs will transfer to the Client. Designer retains the right to display work in portfolio.'
     },
     {
       title: '2. Revisions',
-      text: `The project includes ${data.revisions} rounds of revisions. Additional revisions will be billed at the Designer's hourly rate.`,
+      text: `The project includes ${data.revisionsIncluded} rounds of revisions. Additional revisions will be billed at $100/hour.`
     },
     {
       title: '3. Timeline',
-      text: 'The timeline is an estimate and subject to change based on Client feedback and approval times. Delays in Client responses may extend the project timeline.',
+      text: 'Timeline begins upon receipt of deposit and all required materials. Delays caused by Client may extend delivery dates accordingly.'
     },
     {
-      title: '4. Termination',
-      text: 'Either party may terminate this agreement with 14 days written notice. Client will be billed for all work completed up to the termination date.',
+      title: '4. Kill Fee',
+      text: 'If project is cancelled by Client, Designer retains deposit and is entitled to 50% of remaining balance for work completed.'
     },
     {
-      title: '5. Kill Fee',
-      text: 'If the project is cancelled before completion, Client agrees to pay 50% of the remaining balance as a kill fee.',
+      title: '5. Confidentiality',
+      text: 'Both parties agree to keep confidential information private and not disclose to third parties without written consent.'
     },
     {
-      title: '6. Confidentiality',
-      text: 'Both parties agree to keep confidential information shared during this project private and secure.',
+      title: '6. Termination',
+      text: 'Either party may terminate with 14 days written notice. Client pays for all work completed to date.'
     },
     {
       title: '7. Governing Law',
-      text: `This agreement shall be governed by the laws of the State of ${data.state}.`,
-    },
+      text: `This contract is governed by the laws of ${data.governingState}.`
+    }
   ]
 
-  doc.setFontSize(10)
-  legalTerms.forEach(term => {
-    // Check if we need a new page
-    if (yPos > pageHeight - 40) {
+  terms.forEach(term => {
+    if (yPos > 250) {
       doc.addPage()
-      yPos = margin
+      yPos = 20
     }
-
+    
     doc.setFont('helvetica', 'bold')
-    doc.text(term.title, margin, yPos)
+    doc.text(term.title, 20, yPos)
     yPos += 5
+    
     doc.setFont('helvetica', 'normal')
-    const termLines = doc.splitTextToSize(term.text, pageWidth - 2 * margin - 5)
-    doc.text(termLines, margin + 5, yPos)
-    yPos += termLines.length * 5 + 8
+    const termLines = doc.splitTextToSize(term.text, 170)
+    doc.text(termLines, 20, yPos)
+    yPos += (termLines.length * 5) + 6
   })
 
-  // Signature Section - Always on new page
-  doc.addPage()
-  yPos = margin
-
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'bold')
-  doc.text('SIGNATURES', margin, yPos)
-  yPos += 15
-
-  // Designer Signature
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Designer/Contractor:', margin, yPos)
-  yPos += 15
-  doc.setLineWidth(0.3)
-  doc.line(margin, yPos, margin + 80, yPos)
-  yPos += 5
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.text('Signature', margin, yPos)
-  yPos += 8
-  doc.text(`Name: ${data.contractorName}`, margin, yPos)
-  yPos += 6
-  doc.text('Date: _________________', margin, yPos)
-  yPos += 20
-
-  // Client Signature
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Client:', margin, yPos)
-  yPos += 15
-  doc.line(margin, yPos, margin + 80, yPos)
-  yPos += 5
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.text('Signature', margin, yPos)
-  yPos += 8
-  doc.text(`Name: ${data.clientName}`, margin, yPos)
-  yPos += 6
-  doc.text('Date: _________________', margin, yPos)
-
-  // Footer on every page
-  const totalPages = doc.internal.pages.length - 1
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i)
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(128, 128, 128)
-    doc.text(
-      `Page ${i} of ${totalPages} • ${data.contractNumber}`,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: 'center' }
-    )
+  // Signatures
+  if (yPos > 220) {
+    doc.addPage()
+    yPos = 20
   }
+
+  yPos += 10
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text('SIGNATURES', 20, yPos)
+  yPos += 15
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text('Designer:', 20, yPos)
+  doc.text('Client:', 120, yPos)
+  yPos += 15
+
+  doc.line(20, yPos, 80, yPos)
+  doc.line(120, yPos, 180, yPos)
+  yPos += 5
+
+  doc.text(data.contractorName, 20, yPos)
+  doc.text(data.clientName, 120, yPos)
+  yPos += 6
+
+  doc.text('Date: _______________', 20, yPos)
+  doc.text('Date: _______________', 120, yPos)
 
   return doc.output('blob')
 }
