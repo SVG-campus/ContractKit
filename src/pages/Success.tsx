@@ -9,6 +9,7 @@ export default function Success() {
   const { user } = useAuth()
   const sessionId = searchParams.get('session_id')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (user && sessionId) {
@@ -20,18 +21,47 @@ export default function Success() {
 
   async function updateSubscriptionStatus() {
     try {
+      console.log('Processing checkout session:', sessionId)
+
+      // Get session details from Stripe to get customer ID
+      const stripeSecretKey = import.meta.env.VITE_STRIPE_SECRET_KEY
+      
+      const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
+        headers: {
+          'Authorization': `Bearer ${stripeSecretKey}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to retrieve session from Stripe')
+      }
+
+      const session = await response.json()
+      console.log('Stripe session:', session)
+
+      const customerId = session.customer
+      const subscriptionId = session.subscription
+
+      console.log('Customer ID:', customerId)
+      console.log('Subscription ID:', subscriptionId)
+
+      // Update subscription with Stripe IDs
       const { error } = await supabase
         .from('subscriptions')
         .update({
           status: 'active',
-          stripe_subscription_id: sessionId,
+          stripe_subscription_id: subscriptionId,
+          stripe_customer_id: customerId,
           trial_end: null,
         })
         .eq('user_id', user?.id)
 
       if (error) throw error
-    } catch (error) {
+
+      console.log('Subscription updated successfully!')
+    } catch (error: any) {
       console.error('Error updating subscription:', error)
+      setError(error.message)
     } finally {
       setLoading(false)
     }
@@ -43,6 +73,24 @@ export default function Success() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
           <p className="text-gray-600 text-lg">Processing your subscription...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Subscription Error</h1>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700"
+          >
+            Go to Dashboard
+          </button>
         </div>
       </div>
     )
