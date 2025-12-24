@@ -86,7 +86,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-3">
                 <span className="text-2xl">⚠️</span>
                 <div>
-                  <p className="font-semibold">Trial Expired</p>
+                  <p className="font-semibold">30-Day Trial Expired</p>
                   <p className="text-sm opacity-90">
                     Subscribe now to continue creating contracts
                   </p>
@@ -112,7 +112,7 @@ export default function Dashboard() {
               <div className="flex items-center gap-3">
                 <span className="text-2xl">🎉</span>
                 <div>
-                  <p className="font-semibold">Free Trial Active</p>
+                  <p className="font-semibold">30-Day Free Trial Active</p>
                   <p className="text-sm opacity-90">
                     {trialDaysRemaining} days remaining • Enjoy unlimited access
                   </p>
